@@ -229,6 +229,14 @@ a {
 .save-state[data-state="saved"] { color: #8dcc8d; }
 .save-state[data-state="error"] { color: #eb8076; }
 
+.field-note {
+    display: block;
+    margin-top: 4px;
+    color: var(--app-muted);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
 #the-editor {
     padding-top: 22px;
 }
@@ -251,6 +259,26 @@ a {
 .row-items:hover {
     background: #282c25;
     border-color: #505746;
+}
+
+.item-column-header {
+    display: grid;
+    grid-template-columns: 64px minmax(220px, 1fr) 240px 120px 14px 120px;
+    gap: 10px;
+    align-items: end;
+    min-height: 32px;
+    padding: 0 10px 8px;
+    color: var(--app-muted);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.item-column-header span {
+    text-align: center;
+}
+
+.item-column-header span:nth-child(2) {
+    text-align: left;
 }
 
 #the-editor input[type=text],

@@ -349,6 +349,7 @@ SavegameEditor={
 
 	editItem:function(i){
 		currentEditingItem=i;
+		this._limitItemSelector(this._getItemCategory(this._loadItemName(i)));
 		this.selectItem.value=this._loadItemName(i);
 		document.getElementById('item-name'+i).innerHTML='';
 		document.getElementById('item-name'+i).parentElement.appendChild(this.selectItem);
@@ -356,8 +357,13 @@ SavegameEditor={
 		this.selectItem.click();
 	},
 	editItem2:function(i,nameId){
-		var oldCat=this._getItemCategory(this._loadItemName(i));
+		var oldNameId=this._loadItemName(i);
+		var oldCat=this._getItemCategory(oldNameId);
 		var newCat=this._getItemCategory(nameId);
+		if(oldCat!==newCat){
+			nameId=oldNameId;
+			newCat=oldCat;
+		}
 
 		if(oldCat!==newCat){
 			var row=this._getItemRow(i);
@@ -371,6 +377,19 @@ SavegameEditor={
 		BOTW_Icons.setIcon(document.getElementById('icon'+i), nameId);
 		if(document.getElementById('number-item'+i))
 			document.getElementById('number-item'+i).maxValue=this._getItemMaximumQuantity(nameId);
+	},
+
+	_limitItemSelector:function(category){
+		for(var categoryId in this.selectItem.categories){
+			var group=this.selectItem.categories[categoryId];
+			var active=categoryId===category;
+			group.hidden=!active;
+			group.disabled=!active;
+			for(var i=0; i<group.children.length; i++){
+				group.children[i].hidden=!active;
+				group.children[i].disabled=!active;
+			}
+		}
 	},
 
 	filterItems:function(category){
@@ -619,6 +638,7 @@ SavegameEditor={
 		setValue('defeated-talus', tempFile.readU32(this.Offsets.DEFEATED_TALUS_COUNTER));
 		setValue('defeated-molduga', tempFile.readU32(this.Offsets.DEFEATED_MOLDUGA_COUNTER));
 		setValue('playtime',this._timeToString(tempFile.readU32(this.Offsets.PLAYTIME)));
+		setValue('scale-score', BOTWScoreCalculator.calculate());
 
 
 		/* motorcycle */

@@ -43,6 +43,7 @@
     <script type="text/javascript" src="js/zelda-botw.locations.js"></script>
     <script type="text/javascript" src="js/zelda-botw.icons.js"></script>
     <script type="text/javascript" src="js/zelda-botw.master.js"></script>
+    <script type="text/javascript" src="js/zelda-botw.score.js"></script>
     <script type="text/javascript" src="js/native-app.js"></script>
     <script type="text/javascript">
         <!--
@@ -177,6 +178,20 @@
             <div class="seven columns"><label for="number-playtime">游戏时间</label></div>
             <div class="two columns"><input type="text" id="number-playtime" class="text-right full-width" disabled/>
             </div>
+        </div>
+        <div class="row row-items">
+            <div class="seven columns">
+                <label for="number-scale-score">世界难度缩放分数</label>
+                <small class="field-note">根据有计分上限的敌人击杀记录估算，影响部分敌人升级与武器词条。</small>
+            </div>
+            <div class="two columns"><input type="text" id="number-scale-score" class="text-right full-width" disabled/></div>
+        </div>
+        <div class="row row-items">
+            <div class="seven columns">
+                <span>Amiibo 每日冷却</span>
+                <small class="field-note">将最后使用日期重置为 1970-01-01，不清除 Amiibo 历史。</small>
+            </div>
+            <div class="two columns text-right"><button id="reset-amiibo-cooldown" type="button">重置冷却</button></div>
         </div>
         <!-- 最大心心 -->
         <div class="row row-items">
@@ -321,37 +336,58 @@
     <!-- 选项卡：武器 -->
     <div id="tab-weapons">
         <h3>武器</h3>
+        <div class="item-column-header item-column-header-equipment" aria-label="武器列表列标题">
+            <span>图标</span><span>物品</span><span>词条</span><span>词条数值</span><span></span><span>耐久</span>
+        </div>
         <div id="container-weapons"></div>
     </div>
     <!-- 选项卡：弓箭 -->
     <div id="tab-bows">
         <h3>弓箭</h3>
+        <div class="item-column-header item-column-header-equipment" aria-label="弓箭列表列标题">
+            <span>图标</span><span>物品</span><span>词条</span><span>词条数值</span><span></span><span>耐久</span>
+        </div>
         <div id="container-bows"></div>
     </div>
     <!-- 选项卡：盾 -->
     <div id="tab-shields">
         <h3>盾</h3>
+        <div class="item-column-header item-column-header-equipment" aria-label="盾牌列表列标题">
+            <span>图标</span><span>物品</span><span>词条</span><span>词条数值</span><span></span><span>耐久</span>
+        </div>
         <div id="container-shields"></div>
     </div>
     <!-- 选项卡：防具 -->
     <div id="tab-clothes">
         <h3>防具</h3>
+        <div class="item-column-header" aria-label="防具列表列标题">
+            <span>图标</span><span>物品</span><span></span><span></span><span></span><span>染色</span>
+        </div>
         <div id="container-clothes"></div>
     </div>
     <!-- 选项卡：材料 -->
     <div id="tab-materials">
         <h3>材料</h3>
+        <div class="item-column-header" aria-label="材料列表列标题">
+            <span>图标</span><span>物品</span><span></span><span></span><span></span><span>数量</span>
+        </div>
         <div id="container-materials"></div>
     </div>
     <!-- 选项卡：料理 -->
     <div id="tab-food">
         <h3>料理</h3>
+        <div class="item-column-header" aria-label="料理列表列标题">
+            <span>图标</span><span>物品</span><span></span><span></span><span></span><span>数量</span>
+        </div>
         <div id="container-food"></div>
         <span class="tips row">tips: 修改&添加的料理无法恢复 "心心" 和 "耐力"，属性是随机的，也无法显示食谱。所以不建议修改此项目。</span>
     </div>
     <!-- 选项卡：重要物品 -->
     <div id="tab-other">
         <h3>重要物品</h3>
+        <div class="item-column-header" aria-label="重要物品列表列标题">
+            <span>图标</span><span>物品</span><span></span><span></span><span></span><span>数量</span>
+        </div>
         <div id="container-other"></div>
     </div>
     <!-- 添加物品按钮 -->

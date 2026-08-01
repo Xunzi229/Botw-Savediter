@@ -370,6 +370,18 @@
         toast('已批量更新 ' + fields.length + ' 个物品', 'success');
     }
 
+    function resetAmiiboCooldown() {
+        if (!currentSlot) return;
+        var hash = 0x0a577f65; // AmiiboLastTouchDate (S32, YYYYMMDD)
+        if (SavegameEditor._searchHash(hash) === false) {
+            toast('当前存档不包含 Amiibo 冷却字段', 'error');
+            return;
+        }
+        SavegameEditor._writeValueAtHash(hash, 19700101);
+        markDirty();
+        toast('Amiibo 每日冷却已重置，保存后生效', 'success');
+    }
+
     function filterItems(query) {
         if (!window.currentTab) return;
         var container = byId('container-' + window.currentTab);
@@ -390,6 +402,7 @@
         byId('backup-manager').addEventListener('click', showBackups);
         byId('bulk-max-stats').addEventListener('click', applyMaxStats);
         byId('bulk-fill-items').addEventListener('click', fillCurrentItems);
+        byId('reset-amiibo-cooldown').addEventListener('click', resetAmiiboCooldown);
         byId('item-search').addEventListener('input', function () { filterItems(this.value); });
         Array.prototype.forEach.call(document.querySelectorAll('.tab-button'), function (button) {
             button.addEventListener('click', function () {

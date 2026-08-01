@@ -1,6 +1,6 @@
 {
   "name": "botw-savediter",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "塞尔达传说：旷野之息 游戏存档修改器",
   "main": "main.js",
   "scripts": {
