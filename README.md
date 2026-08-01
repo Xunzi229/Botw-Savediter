@@ -1,66 +1,66 @@
-![](zelda-botw/cover.png)
 # Botw-Savediter
-塞尔达传说：旷野之息 游戏存档修改器
 
-----
+《塞尔达传说：旷野之息》中文桌面存档修改器，支持 Eden、Switch 和 Wii U 版 `game_data.sav`。
 
-### 当前进行中
+## 项目来源
 
-- UI界面的改造 [设计文件 - Figma](https://www.figma.com/file/soYx0CKkQkFEdFc3pUdC6I/Botw-Savediter?node-id=2%3A18&t=neAXrD9xBkXkUOsr-1)
+- 本项目基于 [kailous/Botw-Savediter](https://github.com/kailous/Botw-Savediter) 继续开发，保留原中文界面、翻译和数据资源。
+- 存档格式解析基于 [MarcRobledo/savegame-editors](https://github.com/MarcRobledo/savegame-editors/tree/master/zelda-botw)，按 MIT License 使用。
+- 当前维护仓库：[Xunzi229/Botw-Savediter](https://github.com/Xunzi229/Botw-Savediter)。
 
-### 项目进度 90%
+## v2.0.0 变更
 
-UI 界面：
-- 起始页面 100% 中文的logo 和 文字
-- 修改器内页 100%
+- 重构 Electron 桌面外壳，升级至 Electron 43，启用上下文隔离和沙箱。
+- 自动发现 Eden 的 0-5 号存档槽，显示截图和常用角色参数。
+- 保存最近使用的 8 个目录，支持快速切换和移除失效记录。
+- 存档槽按最后更新时间倒序排列，并显示所属目录。
+- 支持 BOTW v1.8 Switch 存档和常见 Mod 存档。
+- 支持直接写回存档、保存前自动备份及历史备份恢复。
+- 增加角色数值最大化、分类数量/耐久最大化和物品搜索。
+- 修复顶部工具栏覆盖编辑选项的问题，优化中文桌面界面。
+- 收紧本地文件写入范围，增加格式校验、临时文件和失败回滚保护。
 
+## 功能
 
-----
+- 自动发现 Eden 的 0-5 号存档槽，并显示游戏截图、卢比、生命、精力和游戏时间。
+- 本地记录最近使用的 8 个存档目录，启动后可快速切换或移除失效记录。
+- 修改卢比、怪币、生命、精力、英杰之力、坐标、地图和首领计数。
+- 编辑武器、弓、盾、防具、材料、料理和重要物品。
+- 修改物品数量、耐久、词条及词条数值，支持添加、删除和批量修改。
+- 编辑马匹、地图图钉、克洛格、图鉴、地点及 2000 多项高级游戏标志。
+- 支持 v1.0-v1.8、Switch/Wii U 大小端存档及常见 Mod 存档。
+- 原地保存前自动备份，支持查看并一键恢复历史备份。
 
-物品词条：
-- 武器 100%
-- 盾 100%
-- 衣服 100%
-- 弓箭 100%
-- 材料 100%
-- 料理 100%
-- 重要物品 40/42 （ 马匹 原作者还有很多词条没有添加 还需要增加词条 ）
+## 使用
 
-### 难题
+1. 完全关闭游戏和 Eden，避免存档被同时写入。
+2. 运行修改器，直接选择自动发现的存档槽。
+3. 修改参数后点击“保存存档”。
+4. 如需回退，点击“备份记录”并选择要恢复的版本。
 
-- 料理的中文名称（ 不能简单的中文翻译，需要和游戏内保持一致。）
-- 高级编辑 中使用的是 CSV 数据库，这个不知道如何修改。但是这个操作普通玩家应该用不到吧。高级玩家应该无压力，所以就这样吧，这部分不翻译了。哈哈。
+备份位于游戏存档目录下的 `.botw-save-editor-backups`。也可以使用“打开单个存档”编辑其他位置的 `game_data.sav`。
 
-### 求助
+## 开发
 
-如果你愿意一起帮忙，可以在 https://github.com/kailous/Botw-Savediter/tree/main/assist 找到还没翻译完成的词条库。
-当前还有一个: 
+```powershell
+npm install
+npm start
+```
 
-- other.js 这个是重要物品的词条库
+构建 Windows x64 版本：
 
-翻译遵循和中文版游戏内保持一直的原则，所以不需要机器翻译，或者个人翻译。
+```powershell
+npm run package-win
+```
 
-### 关于 savediter.sh 这个脚本
+构建结果位于 `dist/Botw-Save-Editor-win32-x64`。
 
-这个是一个修改存档的辅助脚本，配置好后，可以自动创建存档备份，打开存档目录&修改页面。
-提供了清理配置文件和存档备份的功能。这个脚本要求你保持 mlc01 文件夹在默认位置。
+## 安全设计
 
-### 鸣谢
-- 修改器的原项目：https://github.com/marcrobledo/savegame-editors/tree/master/zelda-botw
-  在线的修改器，所以能跨平台，这大概是 MacOS 上能找到的最好的修改器了。
-- Botw 的 Wiki：https://zelda.huijiwiki.com/
-  中文世界中，大概这是最规范的《塞尔达传说：旷野之息》Wiki了，中英日多语言支持，给翻译工作提供了非常多的便利。
+- 仅允许写入修改器已发现或用户明确选择的 `game_data.sav`。
+- 写入前校验存档大小、版本标头和数据完整性。
+- 每次保存和恢复前创建时间戳备份。
+- 通过临时文件及回滚文件替换，写入失败时恢复原存档。
+- Electron 启用上下文隔离、沙箱并禁用 Node.js 渲染层访问。
 
-----
-
-### 本地版本
-![Botw-Savediter](http://kailous.github.io/Botw-Savediter-Local/bin/cover.png)   
-### Botw-Savediter-Local
-塞尔达传说：旷野之息 游戏存档修改器的本地单文件版本 <br/>
-本来想打包 App 的，但是发现再怎么压缩文件都很大，不如就单个页面文件吧。没有把 [css] 和 [js] 等等 都放到本地是因为后期更新不太方便。这样一个单html文件直接放在 [mlc1] 根目录去，使用起来也比较简单。
-
-----
-
-*tips：这个本地版的，主要是为了解决一个痛点，就是存档编号的问题，以往需要对照着图片确认是哪个存档。但现在这个但文件版本可以获取到存档的截图直接列出来，并标注上编号。方便确认那个是你需要修改的。*
-
-[Botw-Savediter-Local Github](https://github.com/kailous/Botw-Savediter-Local/)
+完整授权信息见 [LICENSE](LICENSE)。

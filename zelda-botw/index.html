@@ -34,6 +34,7 @@
     <!-- 样式库 -->
     <link type="text/css" rel="stylesheet" href="css/zelda-botw.css" media="all"/>
     <link type="text/css" rel="stylesheet" href="css/var.css" media="all"/>
+    <link type="text/css" rel="stylesheet" href="css/app.css" media="all"/>
     <!-- js库 -->
     <script type="text/javascript" src="js/savegame-editor.js"></script>
     <script type="text/javascript" src="js/zelda-botw.js"></script>
@@ -42,6 +43,7 @@
     <script type="text/javascript" src="js/zelda-botw.locations.js"></script>
     <script type="text/javascript" src="js/zelda-botw.icons.js"></script>
     <script type="text/javascript" src="js/zelda-botw.master.js"></script>
+    <script type="text/javascript" src="js/native-app.js"></script>
     <script type="text/javascript">
         <!--
         /* service worker */
@@ -57,19 +59,25 @@
 </head>
 <body>
 
+<div id="app-titlebar">
+    <div class="titlebar-brand"><img src="favicon.png" alt=""><span>BOTW Save Editor</span></div>
+    <div class="titlebar-drag"></div>
+    <div class="window-controls">
+        <button id="window-minimize" type="button" title="最小化" aria-label="最小化">&#8722;</button>
+        <button id="window-maximize" type="button" title="最大化" aria-label="最大化">&#9633;</button>
+        <button id="window-close" type="button" title="关闭" aria-label="关闭">&#215;</button>
+    </div>
+</div>
+
 <!-- 顶部栏 -->
 <div id="header">
     <!-- 标题 -->
     <div id="header-top">
         <div class="row wrapper padding-vertical">
-            <h1>《塞尔达传说：荒野之息》存档编辑器</h1>
+            <h1>《塞尔达传说：旷野之息》存档修改器</h1>
             <div class="six columns text-left"><img alt="logo" src="./assets/logo.svg" style="max-width:100%"/></div>
             <div class="six columns text-right header-buttons">
-                汉化作者 <a href="https://rainforest-kailous.notion.site/" class="author">RainForest</a>
-                <a href="https://github.com/kailous/Botw-Savediter" target="_blank" class="button"><span
-                        class="sprite github"></span> 查看 GitHub</a>
-                <a href="javascript:" onclick="document.getElementById('treatCoke_bg').style.display='block';document.getElementById('treatCoke').style.display='block';" target="_blank" rel="nofollow" class="donate button"><span
-                        class="sprite heart"></span>请我喝可乐</a>
+                <span class="app-subtitle">角色参数、背包、地图、坐骑与高级标志</span>
             </div>
         </div>
     </div>
@@ -103,9 +111,20 @@
                         class="tab-icon master"></i></button>
                 |
                 <!-- 关闭与保存 -->
-                <button class="button with-icon icon3" onclick="closeFile()">关闭文件</button>
-                <button class="button colored blue with-icon icon9" onclick="saveChanges()">保存文件</button>
+                <span id="current-save-label" title="当前存档">未加载存档</span>
+                <button id="show-save-folder" class="button" type="button">打开目录</button>
+                <button id="backup-manager" class="button" type="button">备份记录</button>
+                <button class="button with-icon icon3" onclick="closeFileConfirm()">返回槽位</button>
+                <button id="save-file-button" class="button colored blue with-icon icon9" onclick="saveChanges()">保存存档</button>
             </div>
+        </div>
+        <div id="editor-commandbar" class="row wrapper">
+            <input id="item-search" type="search" placeholder="搜索当前分类中的物品" aria-label="搜索物品">
+            <div class="command-actions">
+                <button id="bulk-max-stats" type="button">角色数值最大化</button>
+                <button id="bulk-fill-items" type="button">当前分类数量/耐久最大化</button>
+            </div>
+            <span id="save-state" class="save-state">未修改</span>
         </div>
     </div>
 </div>
