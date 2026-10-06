@@ -45,18 +45,6 @@
     <script type="text/javascript" src="js/zelda-botw.master.js"></script>
     <script type="text/javascript" src="js/zelda-botw.score.js"></script>
     <script type="text/javascript" src="js/native-app.js"></script>
-    <script type="text/javascript">
-        <!--
-        /* service worker */
-        var FORCE_HTTPS = true;
-        window.addEventListener('load', function () {
-            if (location.protocol === 'http:' && FORCE_HTTPS)
-                location.replace(window.location.href.replace('http:', 'https:'));
-            else if (location.protocol === 'https:' && 'serviceWorker' in navigator)
-                navigator.serviceWorker.register('/savegame-editors/zelda-botw/_cache_service_worker.js', {scope: '/savegame-editors/zelda-botw/'});
-        }, false);
-        -->
-    </script>
 </head>
 <body>
 
@@ -336,24 +324,27 @@
     <!-- 选项卡：武器 -->
     <div id="tab-weapons">
         <h3>武器</h3>
+        <div id="inventory-capacity-weapons" class="inventory-capacity">已用 -- / -- 格</div>
         <div class="item-column-header item-column-header-equipment" aria-label="武器列表列标题">
-            <span>图标</span><span>物品</span><span>词条</span><span>词条数值</span><span></span><span>耐久</span>
+            <span>图标</span><span>物品</span><span>词条</span><span>耐久</span><span>操作</span>
         </div>
         <div id="container-weapons"></div>
     </div>
     <!-- 选项卡：弓箭 -->
     <div id="tab-bows">
         <h3>弓箭</h3>
+        <div id="inventory-capacity-bows" class="inventory-capacity">已用 -- / -- 格</div>
         <div class="item-column-header item-column-header-equipment" aria-label="弓箭列表列标题">
-            <span>图标</span><span>物品</span><span>词条</span><span>词条数值</span><span></span><span>耐久</span>
+            <span>图标</span><span>物品</span><span>词条</span><span>耐久</span><span>操作</span>
         </div>
         <div id="container-bows"></div>
     </div>
     <!-- 选项卡：盾 -->
     <div id="tab-shields">
         <h3>盾</h3>
+        <div id="inventory-capacity-shields" class="inventory-capacity">已用 -- / -- 格</div>
         <div class="item-column-header item-column-header-equipment" aria-label="盾牌列表列标题">
-            <span>图标</span><span>物品</span><span>词条</span><span>词条数值</span><span></span><span>耐久</span>
+            <span>图标</span><span>物品</span><span>词条</span><span>耐久</span><span>操作</span>
         </div>
         <div id="container-shields"></div>
     </div>
@@ -361,7 +352,7 @@
     <div id="tab-clothes">
         <h3>防具</h3>
         <div class="item-column-header" aria-label="防具列表列标题">
-            <span>图标</span><span>物品</span><span></span><span></span><span></span><span>染色</span>
+            <span>图标</span><span>物品</span><span></span><span>染色</span><span>操作</span>
         </div>
         <div id="container-clothes"></div>
     </div>
@@ -369,7 +360,7 @@
     <div id="tab-materials">
         <h3>材料</h3>
         <div class="item-column-header" aria-label="材料列表列标题">
-            <span>图标</span><span>物品</span><span></span><span></span><span></span><span>数量</span>
+            <span>图标</span><span>物品</span><span></span><span>数量</span><span>操作</span>
         </div>
         <div id="container-materials"></div>
     </div>
@@ -377,7 +368,7 @@
     <div id="tab-food">
         <h3>料理</h3>
         <div class="item-column-header" aria-label="料理列表列标题">
-            <span>图标</span><span>物品</span><span></span><span></span><span></span><span>数量</span>
+            <span>图标</span><span>物品</span><span></span><span>数量</span><span>操作</span>
         </div>
         <div id="container-food"></div>
         <span class="tips row">tips: 修改&添加的料理无法恢复 "心心" 和 "耐力"，属性是随机的，也无法显示食谱。所以不建议修改此项目。</span>
@@ -386,7 +377,7 @@
     <div id="tab-other">
         <h3>重要物品</h3>
         <div class="item-column-header" aria-label="重要物品列表列标题">
-            <span>图标</span><span>物品</span><span></span><span></span><span></span><span>数量</span>
+            <span>图标</span><span>物品</span><span></span><span>数量</span><span>操作</span>
         </div>
         <div id="container-other"></div>
     </div>

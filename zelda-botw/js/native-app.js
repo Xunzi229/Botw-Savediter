@@ -30,6 +30,11 @@
         return Math.round(value / 100) / 10 + ' 圈';
     }
 
+    function summaryText(value, suffix) {
+        if (value === null || typeof value === 'undefined') return '--';
+        return suffix ? value + suffix : String(value);
+    }
+
     function setSaveState(text, state) {
         var element = byId('save-state');
         if (!element) return;
@@ -119,8 +124,8 @@
         var stats = document.createElement('dl');
         stats.className = 'slot-stats';
         stats.innerHTML =
-            '<div><dt>卢比</dt><dd>' + slot.summary.rupees + '</dd></div>' +
-            '<div><dt>生命</dt><dd>' + slot.summary.hearts + ' 颗</dd></div>' +
+            '<div><dt>卢比</dt><dd>' + summaryText(slot.summary.rupees) + '</dd></div>' +
+            '<div><dt>生命</dt><dd>' + summaryText(slot.summary.hearts, ' 颗') + '</dd></div>' +
             '<div><dt>精力</dt><dd>' + staminaLabel(slot.summary.stamina) + '</dd></div>' +
             '<div><dt>时间</dt><dd>' + formatPlaytime(slot.summary.playtime) + '</dd></div>';
 
@@ -309,7 +314,12 @@
                 var row = document.createElement('div');
                 row.className = 'backup-row';
                 var info = document.createElement('div');
-                info.innerHTML = '<strong>' + formatDate(backup.createdAt) + '</strong><span>卢比 ' + backup.summary.rupees + ' · 生命 ' + backup.summary.hearts + ' 颗 · ' + backup.summary.versionHeader + '</span>';
+                var title = document.createElement('strong');
+                title.textContent = formatDate(backup.createdAt);
+                var detail = document.createElement('span');
+                detail.textContent = '恢复时再读取并校验这份备份';
+                info.appendChild(title);
+                info.appendChild(detail);
                 var restore = document.createElement('button');
                 restore.type = 'button';
                 restore.textContent = '恢复';

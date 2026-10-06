@@ -261,10 +261,38 @@ a {
     border-color: #505746;
 }
 
-.item-column-header {
+#tab-weapons,
+#tab-bows,
+#tab-shields,
+#tab-clothes,
+#tab-materials,
+#tab-food,
+#tab-other {
     display: grid;
-    grid-template-columns: 64px minmax(220px, 1fr) 240px 120px 14px 120px;
-    gap: 10px;
+    grid-template-columns: 64px minmax(140px, 1fr) max-content minmax(120px, max-content) 34px;
+    column-gap: 10px;
+    align-items: center;
+}
+
+#tab-weapons > *,
+#tab-bows > *,
+#tab-shields > *,
+#tab-clothes > *,
+#tab-materials > *,
+#tab-food > *,
+#tab-other > * {
+    grid-column: 1 / -1;
+}
+
+.item-column-header,
+.row.row-items[data-index],
+[id^="container-"] {
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-column: 1 / -1;
+}
+
+.item-column-header {
     align-items: end;
     min-height: 32px;
     padding: 0 10px 8px;
@@ -273,12 +301,110 @@ a {
     font-weight: 700;
 }
 
+.inventory-capacity {
+    margin: 0 0 6px;
+    padding-right: 10px;
+    color: var(--app-muted);
+    font-size: 12px;
+    text-align: right;
+}
+
+.inventory-capacity[data-full="true"] {
+    color: var(--app-red);
+}
+
+.item-actions {
+    flex: 0 0 34px;
+    width: 34px;
+    justify-content: center;
+}
+
+#the-editor .item-remove-button {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid #66443f;
+    border-radius: 4px;
+    background: #30211f;
+    color: #e18a80;
+    font-size: 22px;
+    line-height: 1;
+}
+
+#the-editor .item-remove-button:hover {
+    border-color: var(--app-red);
+    background: #49302c;
+    color: #fff;
+}
+
 .item-column-header span {
+    text-align: left;
+}
+
+.item-column-header span:last-child {
     text-align: center;
 }
 
-.item-column-header span:nth-child(2) {
+.row.row-items[data-index] > .columns {
+    min-width: 0;
+    width: auto !important;
+    height: auto;
+}
+
+.row.row-items[data-index] > .c6 {
+    flex-wrap: nowrap;
+    align-items: center;
+}
+
+.row.row-items[data-index] img {
+    display: block;
+    width: 64px;
+    height: 64px;
+}
+
+.row.row-items[data-index] .item-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.item-number {
+    position: static;
+    display: inline;
+    width: auto;
+    margin-right: 8px;
+    color: var(--app-gold);
+    font-size: 12px;
     text-align: left;
+}
+
+.row.row-items[data-index] > .c3 > div:empty {
+    display: none;
+}
+
+.row.row-items[data-index] > .c3 select {
+    width: 220px;
+}
+
+.row.row-items[data-index] > .c3 input,
+.row.row-items[data-index] > .c2 input {
+    width: 120px;
+}
+
+.row.row-items[data-index] > .c2 select {
+    width: 140px;
+}
+
+span.tips {
+    margin: 12px 0 0;
+    padding: 10px 12px;
+    border: 1px solid #5c5340;
+    border-radius: 4px;
+    background: #2a261c;
+    color: var(--app-gold);
+    line-height: 1.5;
 }
 
 #the-editor input[type=text],

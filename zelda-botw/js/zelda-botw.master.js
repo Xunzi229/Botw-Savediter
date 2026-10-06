@@ -184,7 +184,7 @@ var BOTWMasterEditor=(function(){
 
 				oReq.onload=function(oEvent){
 					if(this.status===200) {
-						parseHashFile(responseText);
+						parseHashFile(this.response);
 					}else{
 						alert('Unexpected error: can\'t download hash file');
 					}

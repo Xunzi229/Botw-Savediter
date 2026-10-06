@@ -75,7 +75,7 @@ MarcDialogs = function () {
 			d.msg.innerHTML = t, MarcDialogs.open("quick-alert")
 		}, confirm: function (t, n) {
 			if (!u) {
-				u = document.createElement("div"), u.id = "dialog-quick-confirm", u.className = "dialog row", u.logo = document.createElement("img"),u.logo.src ="./assets/wow.svg",u.appendChild(d.logo),u.hr = document.createElement("hr"),u.hr.className = "msghr",d.appendChild(d.hr),u.msg = document.createElement("div"), u.msg.className = "msgtext",u.msg.style.textAlign = "center", u.appendChild(u.msg), u.buttons = document.createElement("div"), u.buttons.className = "buttons";
+				u = document.createElement("div"), u.id = "dialog-quick-confirm", u.className = "dialog row", u.logo = document.createElement("img"),u.logo.src ="./assets/wow.svg",u.appendChild(u.logo),u.hr = document.createElement("hr"),u.hr.className = "msghr",u.appendChild(u.hr),u.msg = document.createElement("div"), u.msg.className = "msgtext",u.msg.style.textAlign = "center", u.appendChild(u.msg), u.buttons = document.createElement("div"), u.buttons.className = "buttons";
 				var l = document.createElement("button");
 				l.className = "button colored blue with-icon icon9", l.innerHTML = i[1], e(l, "click", function () {
 					m()

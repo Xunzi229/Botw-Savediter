@@ -34,6 +34,7 @@ SavegameEditor={
 		0x1e3fd294, 'FLAGSV_BOW',
 		0x23149bf8, 'RUPEES',
 		0x2906f327, 'MAX_HEARTS',
+		0x2fc0d2ab, 'SHIELD_CAPACITY', /* ShieldPorchStockNum */
 		0x333aa6e5, 'HORSE_SADDLES',
 		0x3adff047, 'MAX_STAMINA',
 		0x441b7231, 'DEFEATED_MOLDUGA_COUNTER',
@@ -46,7 +47,9 @@ SavegameEditor={
 		0x6a09fc59, 'ITEMS_QUANTITY',
 		0x73c29681, 'PLAYTIME',
 		0x7b74e117, 'HORSE_NAMES',
+		0x824892be, 'ITEMS_EQUIPPED', /* PorchItem_EquipFlag */
 		0x8a94e07a, 'KOROK_SEED_COUNTER',
+		0x8c270c56, 'WEAPON_CAPACITY', /* WeaponPorchStockNum */
 		0x9383490e, 'MapApp_MapIconNo',
 		0x97f925c3, 'RELIC_GERUDO',
 		0x982ba201, 'HORSE_POSITION',
@@ -59,6 +62,7 @@ SavegameEditor={
 		0xce7afed3, 'MONS',
 		0xd913b769, 'MAPTYPE',
 		0xe1a0ca54, 'HORSE_BONDS', /* max=0x3f80 */
+		0xe7ce4453, 'BOW_CAPACITY', /* BowPorchStockNum */
 		0xea9def3f, 'MapApp_MapIconPos',
 		0xf1cf4807, 'RELIC_GORON',
 		0xfda0cde4, 'RELIC_RITO'
@@ -161,11 +165,19 @@ SavegameEditor={
 	_writeString64:function(offset,str,arrayIndex){if(typeof arrayIndex==='number')offset+=this.Constants.STRING64_SIZE*arrayIndex;this._writeString(offset,str, 16);},
 	_writeString256:function(offset,str){this._writeString(offset,str, 64);},
 
+	_buildHashIndex:function(){
+		var index=new Map();
+		for(var i=0x0c; i<tempFile.fileSize; i+=8){
+			var hash=tempFile.readU32(i);
+			if(!index.has(hash)) index.set(hash, i);
+		}
+		this._hashIndex=index;
+		this._hashIndexFile=tempFile;
+	},
 	_searchHash:function(hash){
-		for(var i=0x0c; i<tempFile.fileSize; i+=8)
-			if(hash===tempFile.readU32(i))
-				return i;
-		return false;
+		if(this._hashIndexFile!==tempFile) this._buildHashIndex();
+		var offset=this._hashIndex.get(hash);
+		return typeof offset==='number'?offset:false;
 	},
 	_readFromHash:function(hash){
 		var offset=this._searchHash(hash);
@@ -180,35 +192,25 @@ SavegameEditor={
 	},
 
 	_getOffsets:function(){
+		this._buildHashIndex();
 		this.Offsets={};
 		this.Headers={};
-		var startSearchOffset=0x0c;
 		for(var i=0; i<this.Hashes.length; i+=2){
-			for(var j=startSearchOffset; j<tempFile.fileSize; j+=8){
-				if(this.Hashes[i]===tempFile.readU32(j)){
-					this.Offsets[this.Hashes[i+1]]=j+4;
-					this.Headers[this.Hashes[i+1]]=this.Hashes[i];
-					startSearchOffset=j+8;
-					break;
-				}
+			var offset=this._hashIndex.get(this.Hashes[i]);
+			if(typeof offset==='number'){
+				this.Offsets[this.Hashes[i+1]]=offset+4;
+				this.Headers[this.Hashes[i+1]]=this.Hashes[i];
 			}
-			/*if(typeof this.Offsets[this.Hashes[i+1]] === 'undefined'){
-				console.log(this.Hashes[i+1]+' not found');
-			}*/
 		}
 	},
 
 	_getItemTranslation:function(itemId){
-		for(var i=0; i<BOTW_Data.Translations.length; i++)
-			if(BOTW_Data.Translations[i].items[itemId])
-				return BOTW_Data.Translations[i].items[itemId];
-		return '<span style="color:red">'+itemId+'</span>'
+		this._ensureItemCatalog();
+		return this._itemTranslation[itemId] || '<span style="color:red">'+itemId+'</span>';
 	},
 	_getItemCategory:function(itemId){
-		for(var i=0; i<BOTW_Data.Translations.length; i++)
-			if(BOTW_Data.Translations[i].items[itemId])
-				return BOTW_Data.Translations[i].id;
-		return 'other'
+		this._ensureItemCatalog();
+		return this._itemCategory[itemId] || 'other';
 	},
 
 	_readString:function(offset, len){
@@ -229,11 +231,49 @@ SavegameEditor={
 		return this._readString(offset, 64);
 	},
 
+	_ensureItemCatalog:function(){
+		if(this._itemCategory) return;
+		this._itemCategory={};
+		this._itemTranslation={};
+		if(typeof BOTW_Data==='undefined' || !BOTW_Data.Translations) return;
+		for(var i=0; i<BOTW_Data.Translations.length; i++){
+			var group=BOTW_Data.Translations[i];
+			for(var item in group.items){
+				if(!group.items[item] || this._itemCategory[item]!==undefined) continue;
+				this._itemCategory[item]=group.id;
+				this._itemTranslation[item]=group.items[item];
+			}
+		}
+	},
+	_ensureItemNames:function(){
+		if(this._itemNames && this._itemNamesFile===tempFile) return;
+		var names=[];
+		for(var i=0; i<this.Constants.MAX_ITEMS; i++){
+			var name=this._readString64(this.Offsets.ITEMS+i*0x80);
+			if(name==='') break;
+			names.push(name);
+		}
+		this._itemNames=names;
+		this._itemNamesFile=tempFile;
+	},
 	_loadItemName:function(i){
-		return this._readString64(this.Offsets.ITEMS+i*0x80);
+		this._ensureItemNames();
+		return i<this._itemNames.length ? this._itemNames[i] : '';
 	},
 	_writeItemName:function(i,newItemNameId){
 		this._writeString64(this.Offsets.ITEMS, newItemNameId, i);
+		if(!this._itemNames || this._itemNamesFile!==tempFile){
+			this._itemNames=null;
+			return;
+		}
+		if(newItemNameId===''){
+			if(i===this._itemNames.length-1) this._itemNames.pop();
+			else this._itemNames=null;
+			return;
+		}
+		if(i===this._itemNames.length) this._itemNames.push(newItemNameId);
+		else if(i<this._itemNames.length) this._itemNames[i]=newItemNameId;
+		else this._itemNames=null;
 	},
 	_getItemMaximumQuantity:function(itemId){
 		var cat=this._getItemCategory(itemId);
@@ -252,8 +292,143 @@ SavegameEditor={
 	_getItemQuantityOffset:function(i){
 		return this.Offsets.ITEMS_QUANTITY+i*0x08;
 	},
+	_getItemEquippedOffset:function(i){
+		return this.Offsets.ITEMS_EQUIPPED+i*0x08;
+	},
 	_getItemRow:function(i){
 		return getField('number-item'+i).parentElement.parentElement
+	},
+	_getItemCount:function(){
+		this._ensureItemNames();
+		return this._itemNames.length;
+	},
+	_getEquipmentCapacity:function(category){
+		var offsetName={weapons:'WEAPON_CAPACITY', bows:'BOW_CAPACITY', shields:'SHIELD_CAPACITY'}[category];
+		return offsetName && typeof this.Offsets[offsetName]==='number' ? tempFile.readU32(this.Offsets[offsetName]) : null;
+	},
+	_usesEquipmentSlot:function(category,itemNameId){
+		return category==='weapons' || category==='shields' || (category==='bows' && itemNameId.startsWith('Weapon_'));
+	},
+	_getEquipmentCount:function(category){
+		var count=0;
+		for(var i=0; i<this.Constants.MAX_ITEMS; i++){
+			var itemNameId=this._loadItemName(i);
+			if(itemNameId==='') break;
+			if(this._getItemCategory(itemNameId)===category && this._usesEquipmentSlot(category,itemNameId)) count++;
+		}
+		return count;
+	},
+	_getEquipmentIndex:function(itemIndex,category){
+		var equipmentIndex=0;
+		for(var i=0; i<itemIndex; i++){
+			var itemNameId=this._loadItemName(i);
+			if(this._getItemCategory(itemNameId)===category && this._usesEquipmentSlot(category,itemNameId)) equipmentIndex++;
+		}
+		return equipmentIndex;
+	},
+	_getModifierArrayNames:function(category){
+		var singular=category.replace(/s$/,'').toUpperCase();
+		return ['FLAGS_'+singular,'FLAGSV_'+singular];
+	},
+	_insertEquipmentModifier:function(category,equipmentIndex,usedCount){
+		var arrays=this._getModifierArrayNames(category);
+		for(var a=0; a<arrays.length; a++){
+			var offset=this.Offsets[arrays[a]];
+			for(var i=usedCount; i>equipmentIndex; i--) tempFile.writeU32(offset+i*8,tempFile.readU32(offset+(i-1)*8));
+			tempFile.writeU32(offset+equipmentIndex*8,0);
+		}
+	},
+	_removeEquipmentModifier:function(category,equipmentIndex,usedCount){
+		var arrays=this._getModifierArrayNames(category);
+		for(var a=0; a<arrays.length; a++){
+			var offset=this.Offsets[arrays[a]];
+			for(var i=equipmentIndex; i<usedCount-1; i++) tempFile.writeU32(offset+i*8,tempFile.readU32(offset+(i+1)*8));
+			tempFile.writeU32(offset+(usedCount-1)*8,0);
+		}
+	},
+	_getCategoryInsertIndex:function(category){
+		var order={weapons:0,bows:1,shields:2,clothes:3,materials:4,food:5,other:6};
+		var itemCount=this._getItemCount();
+		var insertIndex=itemCount;
+		for(var i=0; i<itemCount; i++){
+			var itemCategory=this._getItemCategory(this._loadItemName(i));
+			if(itemCategory===category) insertIndex=i+1;
+			else if(order[itemCategory]>order[category] && insertIndex===itemCount) return i;
+		}
+		return insertIndex;
+	},
+	_updateInventoryCapacity:function(){
+		var categories=['weapons','bows','shields'];
+		for(var i=0; i<categories.length; i++){
+			var category=categories[i];
+			var element=document.getElementById('inventory-capacity-'+category);
+			var capacity=this._getEquipmentCapacity(category);
+			var used=this._getEquipmentCount(category);
+			element.textContent=capacity===null ? '容量字段不可用' : '已用 '+used+' / '+capacity+' 格';
+			element.dataset.full=capacity!==null && used>=capacity ? 'true' : 'false';
+		}
+	},
+	_indexFromElement:function(element){
+		while(element && element.dataset.index===undefined) element=element.parentElement;
+		return Number(element.dataset.index);
+	},
+	_detachItemSelector:function(){
+		if(this.selectItem && this.selectItem.parentElement)
+			this.selectItem.parentElement.removeChild(this.selectItem);
+		currentEditingItem=null;
+	},
+	_setRowIndex:function(row, index){
+		row.dataset.index=String(index);
+		row.id='item-row-'+index;
+		var icon=row.querySelector('img');
+		if(icon) icon.id='icon'+index;
+		var name=row.querySelector('.item-name');
+		if(name) name.id='item-name'+index;
+		var number=row.querySelector('.item-number');
+		if(number) number.innerHTML='#'+index;
+		var quantity=row.querySelector('input[id^="number-item"], select[id^="select-item"]');
+		if(quantity) quantity.id=(quantity.tagName==='SELECT' ? 'select-item' : 'number-item')+index;
+		var modifier=row.querySelector('select[id^="select-modifier-"]');
+		if(modifier){
+			var modifierCategory=modifier.id.replace(/^select-modifier-/,'').replace(/-\d+$/,'');
+			modifier.id='select-modifier-'+modifierCategory+'-'+index;
+		}
+		var modifierValue=row.querySelector('input[id^="number-modifier-"]');
+		if(modifierValue){
+			var valueCategory=modifierValue.id.replace(/^number-modifier-/,'').replace(/-value-\d+$/,'');
+			modifierValue.id='number-modifier-'+valueCategory+'-value-'+index;
+		}
+	},
+	_shiftRowIndices:function(fromIndex, delta){
+		var matched=[];
+		var rows=document.querySelectorAll('.row-items[data-index]');
+		for(var i=0; i<rows.length; i++){
+			if(Number(rows[i].dataset.index)>=fromIndex) matched.push(rows[i]);
+		}
+		matched.sort(function(a,b){
+			return delta>0 ? Number(b.dataset.index)-Number(a.dataset.index) : Number(a.dataset.index)-Number(b.dataset.index);
+		});
+		for(var j=0; j<matched.length; j++)
+			this._setRowIndex(matched[j], Number(matched[j].dataset.index)+delta);
+	},
+	_mountModifier:function(itemNumber, category, modifier, modifierValue){
+		var row=document.getElementById('item-row-'+itemNumber);
+		var additional=row.children[2];
+		while(additional.children.length>1) additional.removeChild(additional.lastChild);
+		var modifierSelect=select('modifier-'+category+'-'+itemNumber, BOTW_Data.MODIFIERS.concat({value:modifier,name:this._toHexInt(modifier)}));
+		modifierSelect.value=modifier;
+		additional.appendChild(modifierSelect);
+		additional.appendChild(inputNumber('modifier-'+category+'-value-'+itemNumber, 0, 0xffffffff, modifierValue));
+	},
+	_clearModifier:function(itemNumber){
+		var additional=document.getElementById('item-row-'+itemNumber).children[2];
+		while(additional.children.length>1) additional.removeChild(additional.lastChild);
+	},
+	_bindDurabilityTooltip:function(row, category){
+		if(category!=='weapons' && category!=='bows' && category!=='shields') return;
+		var text={weapons:'武器耐久',bows:'弓耐久',shields:'盾耐久'}[category];
+		var input=row.querySelector('input[id^="number-item"]');
+		if(input) MarcTooltips.add(input, {text:text,position:'bottom',align:'right'});
 	},
 	_createItemRow:function(i,itemCat){
 		var itemNameId=this._loadItemName(i);
@@ -276,14 +451,15 @@ SavegameEditor={
 		span.id='item-name'+i;
 		span.innerHTML=this._getItemTranslation(itemNameId);
 		span.addEventListener('click', function(){
-			SavegameEditor.editItem(i);
+			SavegameEditor.editItem(SavegameEditor._indexFromElement(this));
 		}, false);
 
 
 		var input;
 		if(itemCat && itemCat==='clothes'){
 			input=select('item'+i, BOTW_Data.DYE_COLORS, function(){
-				BOTW_Icons.setIcon(img, SavegameEditor._loadItemName(i), parseInt(this.value));
+				var index=SavegameEditor._indexFromElement(this);
+				BOTW_Icons.setIcon(document.getElementById('icon'+index), SavegameEditor._loadItemName(index), parseInt(this.value));
 			});
 			input.value=itemVal;
 
@@ -300,51 +476,106 @@ SavegameEditor={
 			input
 		);
 		r.className+=' row-items';
-		r.children[1].appendChild(itemNumber);
+		r.children[1].insertBefore(itemNumber, r.children[1].firstChild);
+
+		var actions=document.createElement('div');
+		actions.className='columns row item-actions';
+		var removeButton=document.createElement('button');
+		removeButton.type='button';
+		removeButton.className='item-remove-button';
+		removeButton.title='移除物品';
+		removeButton.setAttribute('aria-label','移除 '+this._getItemTranslation(itemNameId).replace(/<[^>]+>/g,''));
+		removeButton.textContent='×';
+		removeButton.addEventListener('click',function(event){
+			event.preventDefault();
+			event.stopPropagation();
+			SavegameEditor.removeItem(SavegameEditor._indexFromElement(this));
+		},false);
+		actions.appendChild(removeButton);
+		r.appendChild(actions);
+		r.dataset.index=String(i);
+		r.id='item-row-'+i;
 		return r;
 	},
 
 	addItem:function(){
-		var i=0;
-		while(document.getElementById('number-item'+i) || document.getElementById('select-item'+i)){
-			i++;
+		var itemCount=this._getItemCount();
+		if(itemCount>=this.Constants.MAX_ITEMS){
+			alert('存档的 420 个物品记录已全部占用。');
+			return;
 		}
-		if(i<this.Constants.MAX_ITEMS){
-			if(this._getItemCategory(this.selectItem.value)===currentTab){
-				this.selectItem.selectedIndex++;
-				if(this._getItemCategory(this.selectItem.value)!==currentTab || this.selectItem.value==='')
-					this.selectItem.value=this.selectItem.categories[currentTab].children[0].value;
-			}else{
+		this._limitItemSelector(currentTab);
+		if(this._getItemCategory(this.selectItem.value)===currentTab){
+			this.selectItem.selectedIndex++;
+			if(this._getItemCategory(this.selectItem.value)!==currentTab || this.selectItem.value==='')
 				this.selectItem.value=this.selectItem.categories[currentTab].children[0].value;
-			}
-			var itemNameId=this.selectItem.value;
-			this._writeItemName(i,itemNameId);
-			var row=this._createItemRow(i, false);
-			document.getElementById('container-'+this._getItemCategory(itemNameId)).appendChild(row);
-
-			//add modifier fields
-			//添加修饰字段
-			var newItemCategory = this._getItemCategory(itemNameId);
-			var modifierColumns=['weapons','bows','shields'];
-			if(modifierColumns.indexOf(newItemCategory)>=0){
-				if(newItemCategory === "bows" && !itemNameId.startsWith('Weapon_')){
-					// do nothing (arrows do not have modifiers)
-					// 什么都不做（箭头没有修饰符）
-				}else{
-					var category = currentTab;
-					var categorySingular = category.replace(/s$/,"");
-					var modifier=tempFile.readU32(this.Offsets['FLAGS_'+categorySingular.toUpperCase()]+i*8);
-					var modifierSelect=select('modifier-'+category+'-'+i, BOTW_Data.MODIFIERS.concat({value:modifier,name:this._toHexInt(modifier)}));
-					modifierSelect.value=modifier;
-					var modifierContainer=this._getRowFromItemNumber(i).children[2];
-					modifierContainer.appendChild(modifierSelect);
-					modifierContainer.appendChild(inputNumber('modifier-'+category+'-value-'+i, 0, 0xffffffff, tempFile.readU32(this.Offsets['FLAGSV_'+categorySingular.toUpperCase()]+i*8)));
-				}
-			}
-
-			(row.previousElementSibling || row).scrollIntoView({block:'start', behavior:'smooth'});
-			this.editItem(i);
+		}else{
+			this.selectItem.value=this.selectItem.categories[currentTab].children[0].value;
 		}
+
+		var itemNameId=this.selectItem.value;
+		var itemCategory=this._getItemCategory(itemNameId);
+		var usedCount=this._getEquipmentCount(itemCategory);
+		var capacity=this._getEquipmentCapacity(itemCategory);
+		if(this._usesEquipmentSlot(itemCategory,itemNameId) && capacity!==null && usedCount>=capacity){
+			alert('当前装备槽已满（'+capacity+' 格），请先移除一件物品或在游戏中扩充背包。');
+			return;
+		}
+
+		this._saveInventory();
+		var insertIndex=this._getCategoryInsertIndex(itemCategory);
+		for(var i=itemCount; i>insertIndex; i--){
+			this._writeItemName(i,this._loadItemName(i-1));
+			tempFile.writeU32(this._getItemQuantityOffset(i),tempFile.readU32(this._getItemQuantityOffset(i-1)));
+			tempFile.writeU32(this._getItemEquippedOffset(i),tempFile.readU32(this._getItemEquippedOffset(i-1)));
+		}
+		this._writeItemName(insertIndex,itemNameId);
+		tempFile.writeU32(this._getItemQuantityOffset(insertIndex),1);
+		tempFile.writeU32(this._getItemEquippedOffset(insertIndex),0);
+		if(this._usesEquipmentSlot(itemCategory,itemNameId)) this._insertEquipmentModifier(itemCategory,usedCount,usedCount);
+
+		this._detachItemSelector();
+		this._shiftRowIndices(insertIndex, 1);
+		var row=this._createItemRow(insertIndex, itemCategory);
+		document.getElementById('container-'+itemCategory).appendChild(row);
+		if(this._usesEquipmentSlot(itemCategory,itemNameId)) this._mountModifier(insertIndex, itemCategory, 0, 0);
+		this._bindDurabilityTooltip(row, itemCategory);
+		this._updateInventoryCapacity();
+		showTab(itemCategory);
+		document.getElementById('the-editor').dispatchEvent(new Event('input',{bubbles:true}));
+		this.editItem(insertIndex);
+	},
+
+	removeItem:function(i){
+		var itemNameId=this._loadItemName(i);
+		if(!itemNameId) return;
+		var itemLabel=this._getItemTranslation(itemNameId).replace(/<[^>]+>/g,'');
+		if(!confirm('确定移除“'+itemLabel+'”吗？\n尚未保存时可返回槽位放弃更改；保存时会自动创建备份。')) return;
+
+		this._saveInventory();
+		var category=this._getItemCategory(itemNameId);
+		var itemCount=this._getItemCount();
+		var usesEquipmentSlot=this._usesEquipmentSlot(category,itemNameId);
+		var usedCount=this._getEquipmentCount(category);
+		var equipmentIndex=usesEquipmentSlot ? this._getEquipmentIndex(i,category) : -1;
+		for(var index=i; index<itemCount-1; index++){
+			this._writeItemName(index,this._loadItemName(index+1));
+			tempFile.writeU32(this._getItemQuantityOffset(index),tempFile.readU32(this._getItemQuantityOffset(index+1)));
+			tempFile.writeU32(this._getItemEquippedOffset(index),tempFile.readU32(this._getItemEquippedOffset(index+1)));
+		}
+
+		var lastIndex=itemCount-1;
+		this._writeItemName(lastIndex,'');
+		tempFile.writeU32(this._getItemQuantityOffset(lastIndex),0);
+		tempFile.writeU32(this._getItemEquippedOffset(lastIndex),0);
+		if(usesEquipmentSlot) this._removeEquipmentModifier(category,equipmentIndex,usedCount);
+
+		this._detachItemSelector();
+		document.getElementById('item-row-'+i).remove();
+		this._shiftRowIndices(i+1, -1);
+		this._updateInventoryCapacity();
+		showTab(category);
+		document.getElementById('the-editor').dispatchEvent(new Event('input',{bubbles:true}));
 	},
 
 	editItem:function(i){
@@ -360,36 +591,51 @@ SavegameEditor={
 		var oldNameId=this._loadItemName(i);
 		var oldCat=this._getItemCategory(oldNameId);
 		var newCat=this._getItemCategory(nameId);
+		var oldUsesSlot=this._usesEquipmentSlot(oldCat,oldNameId);
+		var newUsesSlot=this._usesEquipmentSlot(newCat,nameId);
+		var usedCount=this._getEquipmentCount(oldCat);
+		var capacity=this._getEquipmentCapacity(oldCat);
+		if(!oldUsesSlot && newUsesSlot && capacity!==null && usedCount>=capacity){
+			nameId=oldNameId;
+			newCat=oldCat;
+			newUsesSlot=oldUsesSlot;
+			alert('当前装备槽已满，无法把该物品替换为占用装备槽的物品。');
+		}
 		if(oldCat!==newCat){
 			nameId=oldNameId;
 			newCat=oldCat;
+			newUsesSlot=oldUsesSlot;
 		}
-
-		if(oldCat!==newCat){
-			var row=this._getItemRow(i);
-			row.parentElement.removeChild(row);
-			document.getElementById('container-'+newCat).appendChild(row);
-			showTab(newCat);
-			(row.previousElementSibling || row).scrollIntoView({block:'start', behavior:'smooth'});
+		if(oldUsesSlot!==newUsesSlot){
+			this._saveInventory();
+			var equipmentIndex=this._getEquipmentIndex(i,oldCat);
+			if(newUsesSlot) this._insertEquipmentModifier(oldCat,equipmentIndex,usedCount);
+			else this._removeEquipmentModifier(oldCat,equipmentIndex,usedCount);
 		}
 		this._writeItemName(i, nameId);
 		document.getElementById('item-name'+i).innerHTML=this._getItemTranslation(nameId);
 		BOTW_Icons.setIcon(document.getElementById('icon'+i), nameId);
 		if(document.getElementById('number-item'+i))
 			document.getElementById('number-item'+i).maxValue=this._getItemMaximumQuantity(nameId);
+		if(oldUsesSlot!==newUsesSlot){
+			if(newUsesSlot) this._mountModifier(i, oldCat, 0, 0);
+			else this._clearModifier(i);
+			document.getElementById('the-editor').dispatchEvent(new Event('input',{bubbles:true}));
+		}
+		this._updateInventoryCapacity();
 	},
 
 	_limitItemSelector:function(category){
-		for(var categoryId in this.selectItem.categories){
-			var group=this.selectItem.categories[categoryId];
-			var active=categoryId===category;
-			group.hidden=!active;
-			group.disabled=!active;
-			for(var i=0; i<group.children.length; i++){
-				group.children[i].hidden=!active;
-				group.children[i].disabled=!active;
-			}
+		var group=this.selectItem.categories[category];
+		if(!group) return;
+		while(this.selectItem.firstChild) this.selectItem.removeChild(this.selectItem.firstChild);
+		group.hidden=false;
+		group.disabled=false;
+		for(var i=0; i<group.children.length; i++){
+			group.children[i].hidden=false;
+			group.children[i].disabled=false;
 		}
+		this.selectItem.appendChild(group);
 	},
 
 	filterItems:function(category){
@@ -500,12 +746,21 @@ SavegameEditor={
 
 
 	preload:function(){
+		this._ensureItemCatalog();
 		this.selectItem=document.createElement('select');
-		this.selectItem.addEventListener('blur', function(){
-			//console.log('blur');
-			SavegameEditor.editItem2(currentEditingItem, this.value);
-			this.parentElement.removeChild(this);
+		this.selectItem.addEventListener('change', function(){
+			if(currentEditingItem===null) return;
+			var editingItem=currentEditingItem;
 			currentEditingItem=null;
+			SavegameEditor.editItem2(editingItem, this.value);
+			if(this.parentElement) this.parentElement.removeChild(this);
+		}, false);
+		this.selectItem.addEventListener('blur', function(){
+			if(currentEditingItem===null) return;
+			var editingItem=currentEditingItem;
+			currentEditingItem=null;
+			SavegameEditor.editItem2(editingItem, this.value);
+			if(this.parentElement) this.parentElement.removeChild(this);
 		}, false);
 
 		setNumericRange('rupees', 0, 999999);
@@ -678,61 +933,7 @@ SavegameEditor={
 
 		/* items */
 		/* 物品 */
-		empty('container-weapons');
-		empty('container-bows');
-		empty('container-shields');
-		empty('container-clothes');
-		empty('container-materials');
-		empty('container-food');
-		empty('container-other');
-
-		// Since item of the same category are not necessarily adjacent, store item number instead of just a counter
-		// 由于同一类别的项目不一定相邻，因此存储物品编号而不是仅仅存储一个计数器
-		var modifiersArray=[[],[],[]];
-		var search=0; //0:weapons 武器, 1:bows 弓箭, 2:shields 盾牌
-		for(var i=0; i<this.Constants.MAX_ITEMS; i++){
-			var itemNameId=this._loadItemName(i);
-			if(itemNameId==='')
-				break;
-
-			var itemCat=this._getItemCategory(itemNameId);
-			document.getElementById('container-'+itemCat).appendChild(
-				this._createItemRow(i, itemCat)
-			);
-
-			if(itemCat==='weapons'){
-				modifiersArray[0].push(i);
-			}else if(itemCat==='bows' && itemNameId.startsWith('Weapon_')){
-				modifiersArray[1].push(i);
-			}else if(itemCat==='shields'){
-				modifiersArray[2].push(i);
-			}
-		}
-
-		MarcTooltips.add('#container-weapons input',{text:'Weapon durability',position:'bottom',align:'right'});
-		MarcTooltips.add('#container-bows input',{text:'Bow durability',position:'bottom',align:'right'});
-		MarcTooltips.add('#container-shields input',{text:'Shield durability',position:'bottom',align:'right'});
-		BOTW_Icons.startLoadingIcons();
-
-		/* modifier column */
-		/* 修饰列 */
-		var modifierColumns=['weapon','bow','shield'];
-		for(var j=0; j<3; j++){
-			var modifierColumn=modifierColumns[j];
-			for(var i=0; i<modifiersArray[j].length; i++){
-				var itemNumber = modifiersArray[j][i];
-				//Adapt this because indexes are not sequential (the same as in save())
-				// 调整这个因为索引不是连续的（与 save() 中相同）
-				var modifier=tempFile.readU32(this.Offsets['FLAGS_'+modifierColumn.toUpperCase()]+itemNumber*8);
-				var modifierSelect=select('modifier-'+modifierColumn+'s-'+itemNumber, BOTW_Data.MODIFIERS.concat({value:modifier,name:this._toHexInt(modifier)}));
-				modifierSelect.value=modifier;
-
-				var row = this._getRowFromItemNumber(itemNumber);
-				var additional = row.children[2];
-				additional.appendChild(modifierSelect);
-				additional.appendChild(inputNumber('modifier-'+modifierColumn+'s-value-'+itemNumber, 0, 0xffffffff, tempFile.readU32(this.Offsets['FLAGSV_'+modifierColumn.toUpperCase()]+itemNumber*8)));
-			}
-		}
+		this._renderItems();
 
 		/* horses */
 		/* 马匹 */
@@ -796,8 +997,10 @@ SavegameEditor={
 		tempFile.writeF32(this.Offsets.HORSE_POSITION+16, getValue('pos-z-horse'));
 
 
-		/* ITEMS */
-		/* 物品 */
+		this._saveInventory();
+	},
+
+	_saveInventory:function(){
 		for(var i=0; i<this.Constants.MAX_ITEMS; i++){
 			if(document.getElementById('number-item'+i) || document.getElementById('select-item'+i))
 				tempFile.writeU32(this._getItemQuantityOffset(i), getValue('item'+i));
@@ -805,23 +1008,67 @@ SavegameEditor={
 				break;
 		}
 
-		/* modifiers */
-		/* 修饰符 */
 		var modifierCategories=['weapon','bow','shield'];
 		for(var i=0; i<3; i++){
 			var category = modifierCategories[i];
 			var offset = this.Offsets["FLAGS_"+category.toUpperCase()];
 			var valueOffset = this.Offsets["FLAGSV_"+category.toUpperCase()];
 			var container = document.getElementById("container-"+category+"s");
+			var modifierIndex=0;
 			for(var j=0; j<container.children.length; j++){
 				var row = container.children[j];
 				var itemNumber = this._getItemNumberFromRow(row);
-				if(row.children[2].children.length===3){ //Check that the rows we are currently at has modifier select and input
-					tempFile.writeU32(offset+itemNumber*8, getValue('modifier-'+category+'s-'+itemNumber));
-					tempFile.writeU32(valueOffset+itemNumber*8, getValue('modifier-'+category+'s-value-'+itemNumber));
+				if(row.children[2].children.length===3){
+					tempFile.writeU32(offset+modifierIndex*8, getValue('modifier-'+category+'s-'+itemNumber));
+					tempFile.writeU32(valueOffset+modifierIndex*8, getValue('modifier-'+category+'s-value-'+itemNumber));
+					modifierIndex++;
 				}
 			}
 		}
+	},
+
+	_renderItems:function(){
+		var categories=['weapons','bows','shields','clothes','materials','food','other'];
+		var fragments={};
+		for(var c=0; c<categories.length; c++){
+			empty('container-'+categories[c]);
+			fragments[categories[c]]=document.createDocumentFragment();
+		}
+		this._itemNames=null;
+		this._itemNamesFile=null;
+		this._ensureItemNames();
+
+		var modifiersArray=[[],[],[]];
+		for(var i=0; i<this._itemNames.length; i++){
+			var itemNameId=this._itemNames[i];
+			var itemCat=this._getItemCategory(itemNameId);
+			fragments[itemCat].appendChild(this._createItemRow(i, itemCat));
+			if(itemCat==='weapons') modifiersArray[0].push(i);
+			else if(itemCat==='bows' && itemNameId.startsWith('Weapon_')) modifiersArray[1].push(i);
+			else if(itemCat==='shields') modifiersArray[2].push(i);
+		}
+		for(var c=0; c<categories.length; c++)
+			document.getElementById('container-'+categories[c]).appendChild(fragments[categories[c]]);
+
+		MarcTooltips.add('#container-weapons input[id^="number-item"]',{text:'武器耐久',position:'bottom',align:'right'});
+		MarcTooltips.add('#container-bows input[id^="number-item"]',{text:'弓耐久',position:'bottom',align:'right'});
+		MarcTooltips.add('#container-shields input[id^="number-item"]',{text:'盾耐久',position:'bottom',align:'right'});
+		BOTW_Icons.startLoadingIcons();
+
+		var modifierColumns=['weapon','bow','shield'];
+		for(var j=0; j<3; j++){
+			var modifierColumn=modifierColumns[j];
+			for(var n=0; n<modifiersArray[j].length; n++){
+				var itemNumber=modifiersArray[j][n];
+				var modifier=tempFile.readU32(this.Offsets['FLAGS_'+modifierColumn.toUpperCase()]+n*8);
+				var modifierSelect=select('modifier-'+modifierColumn+'s-'+itemNumber, BOTW_Data.MODIFIERS.concat({value:modifier,name:this._toHexInt(modifier)}));
+				modifierSelect.value=modifier;
+				var additional=this._getRowFromItemNumber(itemNumber).children[2];
+				additional.appendChild(modifierSelect);
+				additional.appendChild(inputNumber('modifier-'+modifierColumn+'s-value-'+itemNumber, 0, 0xffffffff, tempFile.readU32(this.Offsets['FLAGSV_'+modifierColumn.toUpperCase()]+n*8)));
+			}
+		}
+		this._updateInventoryCapacity();
 	}
 }
 
@@ -839,7 +1086,7 @@ function showTab(newTab){
 	currentTab=newTab;
 	for(var i=0; i<availableTabs.length; i++){
 		document.getElementById('tab-button-'+availableTabs[i]).className=currentTab===availableTabs[i]?'tab-button active':'tab-button';
-		document.getElementById('tab-'+availableTabs[i]).style.display=currentTab===availableTabs[i]?'block':'none';
+		document.getElementById('tab-'+availableTabs[i]).style.display=currentTab===availableTabs[i]?'':'none';
 	}
 
 	document.getElementById('add-item-button').style.display=(newTab==='home' || newTab==='horses' || newTab==='master')? 'none':'block';
@@ -890,7 +1137,7 @@ function setBooleans(hashTable, counterElement){
 function unlockKoroks(){
 	var unlockedKoroks=setBooleans(BOTW_Data.KOROKS,'koroks');
 	var offset=SavegameEditor._searchHash(0x64622a86); //HiddenKorok_Complete 隐藏的克洛洛完成
-	tempFile.writeU32(offset+4, 1);
+	if(typeof offset==='number') tempFile.writeU32(offset+4, 1);
 
 	//search korok seeds in inventory
 	//在库存中搜索korok种子

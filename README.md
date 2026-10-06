@@ -8,6 +8,14 @@
 - 存档格式解析基于 [MarcRobledo/savegame-editors](https://github.com/MarcRobledo/savegame-editors/tree/master/zelda-botw)，按 MIT License 使用。
 - 当前维护仓库：[Xunzi229/Botw-Savediter](https://github.com/Xunzi229/Botw-Savediter)。
 
+## v2.2.0 变更
+
+- 增加逐项移除物品，删除时同步前移物品、数量、装备状态和分类词条记录。
+- 显示武器、弓箭和盾牌当前已用槽位与存档容量。
+- 新增装备时检查当前槽位容量，避免写入游戏无法正常访问的超额装备。
+- 修复物品分类下拉框选项无法选择的问题。
+- 修复“返回槽位”首次打开确认框时无响应的问题。
+
 ## v2.1.0 变更
 
 - 增加世界难度缩放分数，只读展示部分敌人升级和武器词条进度。
@@ -37,6 +45,7 @@
 - 重置 Amiibo 每日使用冷却，不清除 Amiibo 扫描历史。
 - 编辑武器、弓、盾、防具、材料、料理和重要物品。
 - 修改物品数量、耐久、词条及词条数值，支持添加、删除和批量修改。
+- 显示武器、弓箭和盾牌的已用/总槽位，新增装备时执行容量检查。
 - 编辑马匹、地图图钉、克洛格、图鉴、地点及 2000 多项高级游戏标志。
 - 支持 v1.0-v1.8、Switch/Wii U 大小端存档及常见 Mod 存档。
 - 原地保存前自动备份，支持查看并一键恢复历史备份。
@@ -45,6 +54,7 @@
 
 - 世界难度缩放分数采用 [Marc Robledo 编辑器中的计算实现](https://github.com/MarcRobledo/savegame-editors/blob/master/zelda-botw/zelda-botw.score.js)，其敌人分值来源指向社区的数据研究；该数值是依据存档击杀计数计算的进度参考，不是可直接写入的单一字段。
 - `AmiiboLastTouchDate` 的 `S32` 类型由 [zeldaret/botw 反编译符号](https://github.com/zeldaret/botw/blob/master/src/KingSystem/GameData/gdtCommonFlags.cpp)确认；重置值 `19700101` 参考 [savage13/botw-save-editor](https://github.com/savage13/botw-save-editor/blob/main/src/amiibo.ts) 的现有实现。
+- 装备槽容量读取 `WeaponPorchStockNum`、`BowPorchStockNum` 和 `ShieldPorchStockNum`，删除时同步 `PorchItem_EquipFlag`；字段类型与游戏容量判断依据 [zeldaret/botw](https://github.com/zeldaret/botw/blob/master/src/Game/UI/uiPauseMenuDataMgr.cpp)，合法范围参考 [Pistonite/botw-ist](https://github.com/Pistonite/botw-ist/blob/main/packages/manual/zh/src/action/flags.md)。
 - 未加入仅凭字段名推断的剧情、神兽和 DLC 一键解锁，避免遗漏关联标志导致任务状态不一致。
 
 ## 使用

@@ -1,6 +1,11 @@
-const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron')
+const { app, BrowserWindow, dialog, ipcMain, net, protocol, shell } = require('electron')
 const fs = require('fs')
 const path = require('path')
+const { pathToFileURL } = require('url')
+
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'botw', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }
+])
 
 const TITLE_ID = '01007EF00011E000'
 const SAVE_NAME = 'game_data.sav'
@@ -19,6 +24,8 @@ const FIELD_HASHES = {
   stamina: 0x3adff047,
   playtime: 0x73c29681
 }
+const KEEP_BACKUPS = 20
+const fsp = fs.promises
 
 const allowedSaveFiles = new Set()
 let mainWindow
@@ -76,37 +83,44 @@ function assertSaveBuffer (buffer) {
   }
 }
 
-function findHashValueOffset (buffer, hash) {
-  for (let offset = 0x0c; offset <= buffer.length - 8; offset += 8) {
-    if (buffer.readUInt32LE(offset) === hash) return offset + 4
-  }
-  return -1
-}
-
 function readSummary (buffer) {
-  const readU32 = (name) => {
-    const offset = findHashValueOffset(buffer, FIELD_HASHES[name])
-    return offset >= 0 ? buffer.readUInt32LE(offset) : null
+  const pending = new Map(Object.entries(FIELD_HASHES).map(([name, hash]) => [hash, name]))
+  const offsets = {}
+  for (let offset = 0x0c; offset <= buffer.length - 8 && pending.size; offset += 8) {
+    const hash = buffer.readUInt32LE(offset)
+    const name = pending.get(hash)
+    if (!name) continue
+    offsets[name] = offset + 4
+    pending.delete(hash)
   }
-  const staminaOffset = findHashValueOffset(buffer, FIELD_HASHES.stamina)
   return {
     versionHeader: `0x${buffer.readUInt32LE(0).toString(16).toUpperCase()}`,
-    rupees: readU32('rupees'),
-    hearts: readU32('hearts') / 4,
-    stamina: staminaOffset >= 0 ? buffer.readFloatLE(staminaOffset) : null,
-    playtime: readU32('playtime')
+    rupees: offsets.rupees === undefined ? null : buffer.readUInt32LE(offsets.rupees),
+    hearts: offsets.hearts === undefined ? null : buffer.readUInt32LE(offsets.hearts) / 4,
+    stamina: offsets.stamina === undefined ? null : buffer.readFloatLE(offsets.stamina),
+    playtime: offsets.playtime === undefined ? null : buffer.readUInt32LE(offsets.playtime)
   }
 }
 
-function safeReadDirectories (directory) {
+async function pathExists (filePath) {
   try {
-    return fs.readdirSync(directory, { withFileTypes: true }).filter(entry => entry.isDirectory())
+    await fsp.access(filePath)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function safeReadDirectories (directory) {
+  try {
+    const entries = await fsp.readdir(directory, { withFileTypes: true })
+    return entries.filter(entry => entry.isDirectory())
   } catch {
     return []
   }
 }
 
-function findTitleDirectories (rootDirectory) {
+async function findTitleDirectories (rootDirectory) {
   const root = normalizeFilePath(rootDirectory)
   const found = new Set()
   const directCandidates = [
@@ -118,17 +132,17 @@ function findTitleDirectories (rootDirectory) {
   ]
 
   for (const candidate of directCandidates) {
-    if (path.basename(candidate).toUpperCase() === TITLE_ID && fs.existsSync(candidate)) {
+    if (path.basename(candidate).toUpperCase() === TITLE_ID && await pathExists(candidate)) {
       found.add(candidate)
       continue
     }
-    for (const owner of safeReadDirectories(candidate)) {
+    for (const owner of await safeReadDirectories(candidate)) {
       const ownerPath = path.join(candidate, owner.name)
       const directTitle = path.join(ownerPath, TITLE_ID)
-      if (fs.existsSync(directTitle)) found.add(directTitle)
-      for (const profile of safeReadDirectories(ownerPath)) {
+      if (await pathExists(directTitle)) found.add(directTitle)
+      for (const profile of await safeReadDirectories(ownerPath)) {
         const titlePath = path.join(ownerPath, profile.name, TITLE_ID)
-        if (fs.existsSync(titlePath)) found.add(titlePath)
+        if (await pathExists(titlePath)) found.add(titlePath)
       }
     }
   }
@@ -158,24 +172,29 @@ function writeSettings (settings) {
   fs.writeFileSync(filePath, JSON.stringify(settings, null, 2), 'utf8')
 }
 
-function recentRoots () {
-  return readSettings().recentRoots
+async function recentRoots () {
+  const items = readSettings().recentRoots
     .filter(item => item && typeof item.path === 'string' && item.path.trim())
-    .map(item => ({
-      path: normalizeFilePath(item.path),
-      name: path.basename(normalizeFilePath(item.path)) || normalizeFilePath(item.path),
+  const listed = []
+  for (const item of items) {
+    const itemPath = normalizeFilePath(item.path)
+    listed.push({
+      path: itemPath,
+      name: path.basename(itemPath) || itemPath,
       lastUsedAt: item.lastUsedAt,
-      available: fs.existsSync(normalizeFilePath(item.path))
-    }))
+      available: await pathExists(itemPath)
+    })
+  }
+  return listed
 }
 
-function getRememberedRoots () {
+async function getRememberedRoots () {
   if (process.env.BOTW_SAVE_ROOT) return [path.resolve(process.env.BOTW_SAVE_ROOT)]
   const roots = new Set([
     path.resolve(__dirname, '..', 'Eden-Windows-v0.2.1'),
     path.resolve(__dirname, '..')
   ])
-  for (const item of recentRoots()) roots.add(item.path)
+  for (const item of await recentRoots()) roots.add(item.path)
   return [...roots]
 }
 
@@ -201,36 +220,38 @@ function forgetRoot (saveRoot) {
   return recentRoots()
 }
 
-function slotFromFile (filePath) {
-  const buffer = fs.readFileSync(filePath)
+function captionUrl (filePath) {
+  return 'botw://slot/?save=' + encodeURIComponent(filePath)
+}
+
+async function slotFromFile (filePath) {
+  const buffer = await fsp.readFile(filePath)
   assertSaveBuffer(buffer)
-  const slotDirectory = path.dirname(filePath)
-  const captionPath = path.join(slotDirectory, 'caption.jpg')
-  const stat = fs.statSync(filePath)
-  allowedSaveFiles.add(normalizeFilePath(filePath))
+  const normalized = normalizeFilePath(filePath)
+  const captionPath = path.join(path.dirname(normalized), 'caption.jpg')
+  const stat = await fsp.stat(normalized)
+  allowedSaveFiles.add(normalized)
   return {
-    slot: path.basename(slotDirectory),
-    filePath: normalizeFilePath(filePath),
+    slot: path.basename(path.dirname(normalized)),
+    filePath: normalized,
     modifiedAt: stat.mtime.toISOString(),
     size: stat.size,
-    caption: fs.existsSync(captionPath)
-      ? `data:image/jpeg;base64,${fs.readFileSync(captionPath).toString('base64')}`
-      : null,
+    caption: await pathExists(captionPath) ? captionUrl(normalized) : null,
     summary: readSummary(buffer)
   }
 }
 
-function discoverSlots (rootDirectory) {
-  const roots = rootDirectory ? [rootDirectory] : getRememberedRoots()
+async function discoverSlots (rootDirectory) {
+  const roots = rootDirectory ? [rootDirectory] : await getRememberedRoots()
   const slots = []
   const seen = new Set()
   for (const root of roots) {
-    for (const titleDirectory of findTitleDirectories(root)) {
+    for (const titleDirectory of await findTitleDirectories(root)) {
       for (let slot = 0; slot <= 5; slot++) {
         const filePath = path.join(titleDirectory, String(slot), SAVE_NAME)
-        if (!fs.existsSync(filePath) || seen.has(filePath)) continue
+        if (seen.has(filePath) || !await pathExists(filePath)) continue
         seen.add(filePath)
-        try { slots.push(slotFromFile(filePath)) } catch {}
+        try { slots.push(await slotFromFile(filePath)) } catch {}
       }
     }
   }
@@ -255,58 +276,72 @@ function backupDirectoryFor (filePath) {
   return path.join(path.dirname(path.dirname(filePath)), '.botw-save-editor-backups', `slot-${path.basename(path.dirname(filePath))}`)
 }
 
-function writeSaveSafely (filePath, data) {
+async function pruneBackups (backupDirectory) {
+  const entries = await fsp.readdir(backupDirectory, { withFileTypes: true })
+  const backups = []
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(`-${SAVE_NAME}`)) continue
+    const backupPath = path.join(backupDirectory, entry.name)
+    const stat = await fsp.stat(backupPath)
+    backups.push({ backupPath, createdAt: stat.mtimeMs })
+  }
+  backups.sort((a, b) => b.createdAt - a.createdAt)
+  await Promise.all(backups.slice(KEEP_BACKUPS).map(item => fsp.rm(item.backupPath)))
+}
+
+async function writeSaveSafely (filePath, data) {
   const target = assertAllowedPath(filePath)
   const nextBuffer = Buffer.from(data)
   assertSaveBuffer(nextBuffer)
-  const currentBuffer = fs.readFileSync(target)
+  const currentBuffer = await fsp.readFile(target)
   assertSaveBuffer(currentBuffer)
 
   const backupDirectory = backupDirectoryFor(target)
-  fs.mkdirSync(backupDirectory, { recursive: true })
+  await fsp.mkdir(backupDirectory, { recursive: true })
   const backupPath = path.join(backupDirectory, `${timestamp()}-${SAVE_NAME}`)
-  fs.copyFileSync(target, backupPath, fs.constants.COPYFILE_EXCL)
+  await fsp.copyFile(target, backupPath, fs.constants.COPYFILE_EXCL)
 
   const temporaryPath = `${target}.${process.pid}.tmp`
   const rollbackPath = `${target}.${process.pid}.rollback`
   try {
-    fs.writeFileSync(temporaryPath, nextBuffer, { flag: 'wx' })
-    fs.renameSync(target, rollbackPath)
+    await fsp.writeFile(temporaryPath, nextBuffer, { flag: 'wx' })
+    await fsp.rename(target, rollbackPath)
     try {
-      fs.renameSync(temporaryPath, target)
-      fs.rmSync(rollbackPath)
+      await fsp.rename(temporaryPath, target)
+      await fsp.rm(rollbackPath)
     } catch (error) {
-      if (fs.existsSync(rollbackPath) && !fs.existsSync(target)) fs.renameSync(rollbackPath, target)
+      if (await pathExists(rollbackPath) && !await pathExists(target)) await fsp.rename(rollbackPath, target)
       throw error
     }
   } finally {
-    if (fs.existsSync(temporaryPath)) fs.rmSync(temporaryPath)
+    if (await pathExists(temporaryPath)) await fsp.rm(temporaryPath)
   }
+  await pruneBackups(backupDirectory)
 
-  return { backupPath, summary: readSummary(nextBuffer), modifiedAt: fs.statSync(target).mtime.toISOString() }
+  const stat = await fsp.stat(target)
+  return { backupPath, summary: readSummary(nextBuffer), modifiedAt: stat.mtime.toISOString() }
 }
 
-function listBackups (filePath) {
+async function listBackups (filePath) {
   const target = assertAllowedPath(filePath)
   const backupDirectory = backupDirectoryFor(target)
-  if (!fs.existsSync(backupDirectory)) return []
-  return fs.readdirSync(backupDirectory, { withFileTypes: true })
-    .filter(entry => entry.isFile() && entry.name.endsWith(`-${SAVE_NAME}`))
-    .map(entry => {
-      const backupPath = path.join(backupDirectory, entry.name)
-      const buffer = fs.readFileSync(backupPath)
-      assertSaveBuffer(buffer)
-      return {
-        name: entry.name,
-        backupPath,
-        createdAt: fs.statSync(backupPath).mtime.toISOString(),
-        summary: readSummary(buffer)
-      }
+  if (!await pathExists(backupDirectory)) return []
+  const entries = await fsp.readdir(backupDirectory, { withFileTypes: true })
+  const backups = []
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(`-${SAVE_NAME}`)) continue
+    const backupPath = path.join(backupDirectory, entry.name)
+    const stat = await fsp.stat(backupPath)
+    backups.push({
+      name: entry.name,
+      backupPath,
+      createdAt: stat.mtime.toISOString()
     })
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  }
+  return backups.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 }
 
-function restoreBackup (filePath, backupPath) {
+async function restoreBackup (filePath, backupPath) {
   const target = assertAllowedPath(filePath)
   const backupDirectory = path.resolve(backupDirectoryFor(target))
   const source = path.resolve(String(backupPath || ''))
@@ -314,23 +349,23 @@ function restoreBackup (filePath, backupPath) {
   if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
     throw new Error('备份文件不属于当前存档槽位')
   }
-  const buffer = fs.readFileSync(source)
+  const buffer = await fsp.readFile(source)
   assertSaveBuffer(buffer)
   return writeSaveSafely(target, buffer)
 }
 
 ipcMain.handle('save:discover', (_event, rootDirectory) => discoverSlots(rootDirectory))
 ipcMain.handle('save:recent-roots', () => recentRoots())
-ipcMain.handle('save:use-root', (_event, rootDirectory) => {
-  const slots = discoverSlots(rootDirectory)
-  return { root: normalizeFilePath(rootDirectory), slots, recentRoots: rememberRoot(rootDirectory) }
+ipcMain.handle('save:use-root', async (_event, rootDirectory) => {
+  const slots = await discoverSlots(rootDirectory)
+  return { root: normalizeFilePath(rootDirectory), slots, recentRoots: await rememberRoot(rootDirectory) }
 })
 ipcMain.handle('save:forget-root', (_event, rootDirectory) => forgetRoot(rootDirectory))
 ipcMain.handle('save:choose-root', async () => {
   const result = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory'], title: '选择 Eden 目录或存档目录' })
   if (result.canceled) return null
   const root = result.filePaths[0]
-  return { root, slots: discoverSlots(root), recentRoots: rememberRoot(root) }
+  return { root, slots: await discoverSlots(root), recentRoots: await rememberRoot(root) }
 })
 ipcMain.handle('save:choose-file', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
@@ -339,13 +374,13 @@ ipcMain.handle('save:choose-file', async () => {
     filters: [{ name: 'BOTW Save', extensions: ['sav'] }]
   })
   if (result.canceled) return null
-  const slot = slotFromFile(result.filePaths[0])
-  rememberRoot(path.dirname(path.dirname(result.filePaths[0])))
+  const slot = await slotFromFile(result.filePaths[0])
+  await rememberRoot(path.dirname(path.dirname(result.filePaths[0])))
   return slot
 })
 ipcMain.handle('save:read', (_event, filePath) => {
   const target = assertAllowedPath(filePath)
-  return fs.readFileSync(target)
+  return fsp.readFile(target)
 })
 ipcMain.handle('save:write', (_event, payload) => writeSaveSafely(payload.filePath, payload.data))
 ipcMain.handle('save:list-backups', (_event, filePath) => listBackups(filePath))
@@ -360,6 +395,16 @@ ipcMain.on('window:toggle-maximize', () => {
 ipcMain.on('window:close', () => mainWindow && mainWindow.close())
 
 app.whenReady().then(() => {
+  protocol.handle('botw', async (request) => {
+    try {
+      const savePath = new URL(request.url).searchParams.get('save')
+      const normalized = assertAllowedPath(savePath)
+      const captionPath = path.join(path.dirname(normalized), 'caption.jpg')
+      return await net.fetch(pathToFileURL(captionPath).href)
+    } catch {
+      return new Response(null, { status: 404 })
+    }
+  })
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
