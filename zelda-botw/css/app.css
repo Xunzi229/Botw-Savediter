@@ -301,6 +301,22 @@ a {
     font-weight: 700;
 }
 
+.dialog.active .buttons {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    margin-top: 24px;
+}
+
+.dialog.active .buttons button {
+    flex: 0 0 auto;
+    margin: 0;
+    min-width: 120px;
+}
+
 .inventory-capacity {
     margin: 0 0 6px;
     padding-right: 10px;
@@ -355,6 +371,14 @@ a {
 .row.row-items[data-index] > .c6 {
     flex-wrap: nowrap;
     align-items: center;
+    width: 100% !important;
+    min-width: 0;
+}
+
+.row.row-items[data-index] > .c6 select {
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto;
 }
 
 .row.row-items[data-index] img {

@@ -5,7 +5,7 @@
 	translate by RainForest 2023
 	除了提示框汉化以外，我还做了不通信息的颜色区分，现在可以用 msgnb 来修改数字颜色为蓝色，msgnm 修改文字颜色为橙色。
 */
-var currentEditingItem=0;
+var currentEditingItem=null;
 
 SavegameEditor={
 	Name:'The legend of Zelda: Breath of the wild',
@@ -83,11 +83,7 @@ SavegameEditor={
 		return row;
 	},
 	_getItemNumberFromRow: function(rowElement){
-		var rawItemNumber = rowElement
-			.children[1] // Name column 名称列
-			.children[1] // span with the item number 跨度与项目编号
-			.innerHTML;
-		return rawItemNumber.match(/#([0-9]*)/)[1];
+		return rowElement.dataset.index;
 	},
 	_getItemNameFromDoc: function(itemNumber){
 		var element = document.getElementById("item-name"+itemNumber);
@@ -372,10 +368,15 @@ SavegameEditor={
 		while(element && element.dataset.index===undefined) element=element.parentElement;
 		return Number(element.dataset.index);
 	},
-	_detachItemSelector:function(){
-		if(this.selectItem && this.selectItem.parentElement)
-			this.selectItem.parentElement.removeChild(this.selectItem);
+	_detachItemSelector:function(commit){
+		var select=this.selectItem;
+		var editingItem=currentEditingItem;
+		var value=select && select.value;
+		clearTimeout(this._itemSelectorBlurTimer);
+		this._itemEditSession=null;
 		currentEditingItem=null;
+		if(select && select.parentElement) select.parentElement.removeChild(select);
+		if(commit!==false && editingItem!==null && select) this.editItem2(editingItem, value);
 	},
 	_setRowIndex:function(row, index){
 		row.dataset.index=String(index);
@@ -499,21 +500,24 @@ SavegameEditor={
 	},
 
 	addItem:function(){
+		// Commit before changing options or shifting inventory indices.
+		this._detachItemSelector();
+		var group=this.selectItem.categories[currentTab];
+		if(!group || !group.children.length) return;
 		var itemCount=this._getItemCount();
 		if(itemCount>=this.Constants.MAX_ITEMS){
 			alert('存档的 420 个物品记录已全部占用。');
 			return;
 		}
-		this._limitItemSelector(currentTab);
-		if(this._getItemCategory(this.selectItem.value)===currentTab){
-			this.selectItem.selectedIndex++;
-			if(this._getItemCategory(this.selectItem.value)!==currentTab || this.selectItem.value==='')
-				this.selectItem.value=this.selectItem.categories[currentTab].children[0].value;
-		}else{
-			this.selectItem.value=this.selectItem.categories[currentTab].children[0].value;
+		var nextIndex=0;
+		for(var optionIndex=0; optionIndex<group.children.length; optionIndex++){
+			if(group.children[optionIndex].value===this.selectItem.value){
+				nextIndex=(optionIndex+1)%group.children.length;
+				break;
+			}
 		}
 
-		var itemNameId=this.selectItem.value;
+		var itemNameId=group.children[nextIndex].value;
 		var itemCategory=this._getItemCategory(itemNameId);
 		var usedCount=this._getEquipmentCount(itemCategory);
 		var capacity=this._getEquipmentCapacity(itemCategory);
@@ -534,7 +538,6 @@ SavegameEditor={
 		tempFile.writeU32(this._getItemEquippedOffset(insertIndex),0);
 		if(this._usesEquipmentSlot(itemCategory,itemNameId)) this._insertEquipmentModifier(itemCategory,usedCount,usedCount);
 
-		this._detachItemSelector();
 		this._shiftRowIndices(insertIndex, 1);
 		var row=this._createItemRow(insertIndex, itemCategory);
 		document.getElementById('container-'+itemCategory).appendChild(row);
@@ -547,6 +550,7 @@ SavegameEditor={
 	},
 
 	removeItem:function(i){
+		this._detachItemSelector();
 		var itemNameId=this._loadItemName(i);
 		if(!itemNameId) return;
 		var itemLabel=this._getItemTranslation(itemNameId).replace(/<[^>]+>/g,'');
@@ -570,7 +574,6 @@ SavegameEditor={
 		tempFile.writeU32(this._getItemEquippedOffset(lastIndex),0);
 		if(usesEquipmentSlot) this._removeEquipmentModifier(category,equipmentIndex,usedCount);
 
-		this._detachItemSelector();
 		document.getElementById('item-row-'+i).remove();
 		this._shiftRowIndices(i+1, -1);
 		this._updateInventoryCapacity();
@@ -579,16 +582,21 @@ SavegameEditor={
 	},
 
 	editItem:function(i){
-		currentEditingItem=i;
+		this._detachItemSelector();
+		if(!this._loadItemName(i)) return;
 		this._limitItemSelector(this._getItemCategory(this._loadItemName(i)));
 		this.selectItem.value=this._loadItemName(i);
+		currentEditingItem=i;
+		this._itemEditSession={index:i};
 		document.getElementById('item-name'+i).innerHTML='';
 		document.getElementById('item-name'+i).parentElement.appendChild(this.selectItem);
 		this.selectItem.focus();
-		this.selectItem.click();
 	},
 	editItem2:function(i,nameId){
 		var oldNameId=this._loadItemName(i);
+		if(!oldNameId || !document.getElementById('item-name'+i)) return;
+		// Unknown/modded items have no option; closing the selector must retain them.
+		if(!nameId) nameId=oldNameId;
 		var oldCat=this._getItemCategory(oldNameId);
 		var newCat=this._getItemCategory(nameId);
 		var oldUsesSlot=this._usesEquipmentSlot(oldCat,oldNameId);
@@ -620,14 +628,16 @@ SavegameEditor={
 		if(oldUsesSlot!==newUsesSlot){
 			if(newUsesSlot) this._mountModifier(i, oldCat, 0, 0);
 			else this._clearModifier(i);
-			document.getElementById('the-editor').dispatchEvent(new Event('input',{bubbles:true}));
 		}
+		if(nameId!==oldNameId)
+			document.getElementById('the-editor').dispatchEvent(new Event('input',{bubbles:true}));
 		this._updateInventoryCapacity();
 	},
 
 	_limitItemSelector:function(category){
 		var group=this.selectItem.categories[category];
 		if(!group) return;
+		if(this.selectItem.children.length===1 && this.selectItem.firstChild===group) return;
 		while(this.selectItem.firstChild) this.selectItem.removeChild(this.selectItem.firstChild);
 		group.hidden=false;
 		group.disabled=false;
@@ -749,18 +759,16 @@ SavegameEditor={
 		this._ensureItemCatalog();
 		this.selectItem=document.createElement('select');
 		this.selectItem.addEventListener('change', function(){
-			if(currentEditingItem===null) return;
-			var editingItem=currentEditingItem;
-			currentEditingItem=null;
-			SavegameEditor.editItem2(editingItem, this.value);
-			if(this.parentElement) this.parentElement.removeChild(this);
+			SavegameEditor._detachItemSelector();
 		}, false);
 		this.selectItem.addEventListener('blur', function(){
-			if(currentEditingItem===null) return;
-			var editingItem=currentEditingItem;
-			currentEditingItem=null;
-			SavegameEditor.editItem2(editingItem, this.value);
-			if(this.parentElement) this.parentElement.removeChild(this);
+			var select=this;
+			var session=SavegameEditor._itemEditSession;
+			clearTimeout(SavegameEditor._itemSelectorBlurTimer);
+			SavegameEditor._itemSelectorBlurTimer=setTimeout(function(){
+				if(!session || SavegameEditor._itemEditSession!==session || document.activeElement===select) return;
+				SavegameEditor._detachItemSelector();
+			}, 200);
 		}, false);
 
 		setNumericRange('rupees', 0, 999999);
@@ -958,6 +966,7 @@ SavegameEditor={
 	/* save function */
 	/* 保存函数 */
 	save:function(){
+		this._detachItemSelector();
 		/* STATS */
 		/* 统计 */
 		tempFile.writeU32(this.Offsets.RUPEES, getValue('rupees'));
@@ -1028,6 +1037,8 @@ SavegameEditor={
 	},
 
 	_renderItems:function(){
+		// A reload may already point at another save; discard the old edit session.
+		this._detachItemSelector(false);
 		var categories=['weapons','bows','shields','clothes','materials','food','other'];
 		var fragments={};
 		for(var c=0; c<categories.length; c++){
@@ -1083,6 +1094,7 @@ var availableTabs=['home','weapons','bows','shields','clothes','materials','food
 
 var currentTab;
 function showTab(newTab){
+	if(newTab!==currentTab) SavegameEditor._detachItemSelector();
 	currentTab=newTab;
 	for(var i=0; i<availableTabs.length; i++){
 		document.getElementById('tab-button-'+availableTabs[i]).className=currentTab===availableTabs[i]?'tab-button active':'tab-button';

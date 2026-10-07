@@ -427,7 +427,20 @@
         });
 
         var originalClose = window.closeFile;
+        window.closeFileConfirm = function () {
+            // Finish a pending item selection before checking for unsaved changes.
+            SavegameEditor._detachItemSelector();
+            if (!isDirty) {
+                window.closeFile();
+                return;
+            }
+            MarcDialogs.confirm('有未保存的修改，返回槽位将放弃这些修改。', function () {
+                window.closeFile();
+                MarcDialogs.close();
+            });
+        };
         window.closeFile = function () {
+            SavegameEditor._detachItemSelector(false);
             currentSlot = null;
             isDirty = false;
             byId('current-save-label').textContent = '未加载存档';
